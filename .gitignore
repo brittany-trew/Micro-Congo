@@ -10,6 +10,6 @@
 # Large/output folders
 data/
 output/
-
+scripts/archived/
 # Other
 basemaps.qgz
