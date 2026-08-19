@@ -1,0 +1,15 @@
+# R / RStudio
+.Rhistory
+.RData
+.Ruserdata
+.Rproj.user/
+
+# macOS
+.DS_Store
+
+# Large/output folders
+data/
+output/
+
+# Other
+basemaps.qgz
