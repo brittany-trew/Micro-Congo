@@ -1,15 +1,20 @@
-#' This script sets up file locations and general parameters for 
-#' microclimate analysis of LiDAR sites in Odzala NP, Congo.
-#' Written by Brittany Trew in 2026 for the MicroMaze Project, funded by HSFP.
+#' Manuscript: Vertical microclimate diversity shapes thermal refugia in Congolese rainforests.
+#' Date: August 2026
+#' Author: Brittany Trew (*brittany.trew@fas.harvard.edu*)
+#' Description: XXXX
+#' ----------------------------------------------------------------------------
 #' ----------------------------------------------------------------------------
 
 #' ----------------------------------------------------------------------------
 #' ----------------------------------------------------------------------------
-#' [Inital Setup.]
+#' [Load Helper Functions.]
 scripts.path <- "scripts/"
-source(paste0(scripts.path,"utils.R")) # loads worker functions
+#' Load helper functions:
+source(paste0(scripts.path,"utils.R"))
+source(paste0(scripts.path,"helpers_general.R"))
+source(paste0(scripts.path,"helpers_MicroDrivers.R"))
 
-#' ~~ Required libraries.
+#' [Required R packages]
 packages <- c("dplyr", "tidyr", "readr", "microclimf",
               "myClim", "ggplot2", "sf", 'lidR',"RCSF", "RMCC", "Rcpp", 
               "rgl", "luna", "geodata","sf","xml2","jsonlite",
@@ -19,67 +24,58 @@ packages <- c("dplyr", "tidyr", "readr", "microclimf",
               "patchwork")
 load_packages(packages)
 
-#' ~~ CPP Code:
-sourceCpp(paste0(scripts.path,"CppFunctions.cpp"))  # compiles and links required C++ code
+#' [Set Pathways.]
+#' (1) LiDAR Point Clouds.
+lidar.data <- "/Volumes/HD01/LIDAR/"
 
-#' ~~ Set Pathways.
-#' External drive pathways
-volumes <- "/Volumes/MicroMaze/"
-volumes2 <- "/Volumes/HD01/"
-volumes3 <- "/Volumes/MicroMaze2/"
-
-lidar.data <- paste0(volumes2,"LIDAR/")
-
-#' Pathways to mclidar git
+#' (2) Output and input locations for the data driving the microclimate model
 mclidar.path <- "../mclidar/"
 mclidar.out <- paste0(mclidar.path,"output/")
 mclidar.in <- paste0(mclidar.path,"data/")
 
-shp.path <- paste0(mclidar.in,"shapefiles/")
+#' (3) Location of ERA5 Reanalysis Data 
 clim.path <- paste0(mclidar.in,"era5/")
 
-#' Pathways to congo git
+#' (4) Inout and output locations for the manuscript analysis (post microclimate modelling)
 in.data <- "data/"
 out.data <- "output/"
 
-#' Define location of temporary files
+#' (5) Location for temporary files (ideally an external hard drive)
 terraOptions(
-  tempdir = paste0(volumes3,"tmp"),
+  tempdir = "/Volumes/MicroMaze2/tmp",
   memfrac = 0.7
 )
-#' ----------------------------------------------------------------------------
 
-#' ----------------------------------------------------------------------------
-#' ----------------------------------------------------------------------------
-#' [Define Site and Model Parameters]
+volumes3 <- "/Volumes/MicroMaze2/"
+volumes <- "/Volumes/MicroMaze/"
+
+#' [Define Site Parameters]
+#' (1) Spatial resolution & vertical intervals.
 res <- 5; dzd <- 0.5
 
-#' ~~ Site Parameters
+#' (2) Site information.
 site.summary <- read.csv(paste0(in.data,"Site_Info/site-summary.csv"))
 site.location <- unique(site.summary$SiteName)
 print(paste0("Site Location: ", site.location))
-
 all.samples <- unique(site.summary$Sample)
 print(all.samples)
 year <- 2021
 num <- which(site.summary$Year == year)
-
 site.sample <- site.summary[num,]
 input_month <- site.sample$Month
+
+#' (3) Projection system.
 defined_proj <- paste0("EPSG:",site.sample$EPSG[[1]])
 print(defined_proj)
 
+#' (4) Site-specific Pathways.
 head.path <- paste0(mclidar.out,site.location,"/",sample.name,"/",year,"/")
 all.tiles <- list.files(paste0(lidar.data,site.location,"/",sample.name,"/",year), full.names = T)
 
-#' Point cloud files:
 las.path <- paste0(lidar.data,site.location,"/",sample.name,"/",year)
 las.files <- list.files(las.path, pattern = "\\.(las|laz)$", full.names = TRUE)
-#' ----------------------------------------------------------------------------
 
-#' ----------------------------------------------------------------------------
-#' ----------------------------------------------------------------------------
-#' [Plotting parameters]
+#' [Standardised Plotting Parameters]
 colour.p <- c(
   "1" = "#ca763b",
   "2" = "#852e47",
@@ -101,7 +97,6 @@ others <- c(
   "#852e47",
   "#ca763b"
 )
-
 
 option1 <- c(
   "1" = "#5a6b44",
