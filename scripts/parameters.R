@@ -50,8 +50,8 @@ volumes3 <- "/Volumes/MicroMaze2/"
 volumes <- "/Volumes/MicroMaze/"
 
 #' [Define Site Parameters]
-#' (1) Spatial resolution & vertical intervals.
-res <- 5; dzd <- 0.5
+#' (1) Spatial resolution; vertical interval; extinction coefficient
+res <- 5; dzd <- 0.5; k.forest <- 0.5
 
 #' (2) Site information.
 site.summary <- read.csv(paste0(in.data,"Site_Info/site-summary.csv"))
@@ -72,8 +72,16 @@ print(defined_proj)
 head.path <- paste0(mclidar.out,site.location,"/",sample.name,"/",year,"/")
 all.tiles <- list.files(paste0(lidar.data,site.location,"/",sample.name,"/",year), full.names = T)
 
+#' LiDAR data
 las.path <- paste0(lidar.data,site.location,"/",sample.name,"/",year)
 las.files <- list.files(las.path, pattern = "\\.(las|laz)$", full.names = TRUE)
+
+#' [Create output paths - site specific]
+#' Output path for Plant Area Density.
+pad.path <- paste0(head.path,"pad/")
+dir.create(pad.path, showWarnings = F)
+
+
 
 #' [Standardised Plotting Parameters]
 colour.p <- c(
