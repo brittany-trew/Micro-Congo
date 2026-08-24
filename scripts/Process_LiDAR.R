@@ -74,9 +74,9 @@ for (a in 1:length(all.tiles)) {
     
     print("Estimating LAD...")
     # Estimate LAD for each voxel in leveled array
-    lad.estimates <- machorn.lad(leveld.lidar.array = level.canopy, 
+    lad.estimates <- machorn.lad.fixed(leveld.lidar.array = level.canopy, 
                                  voxel.height = dzd, 
-                                 beer.lambert.constant = k.forest)
+                                 beer.lambert.constant = NULL)
     
     
     # Convert the LAD array into a single raster stack

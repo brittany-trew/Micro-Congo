@@ -51,7 +51,7 @@ volumes <- "/Volumes/MicroMaze/"
 
 #' [Define Site Parameters]
 #' (1) Spatial resolution; vertical interval; extinction coefficient
-res <- 5; dzd <- 0.5; k.forest <- 0.5
+res <- 5; dzd <- 0.5
 
 #' (2) Site information.
 site.summary <- read.csv(paste0(in.data,"Site_Info/site-summary.csv"))
@@ -59,6 +59,9 @@ site.location <- unique(site.summary$SiteName)
 print(paste0("Site Location: ", site.location))
 all.samples <- unique(site.summary$Sample)
 print(all.samples)
+sample.name <- all.samples[1] #' *CHANGE AS NEEDED*
+num <- which(site.summary$Sample == sample.name)
+
 year <- 2021
 num <- which(site.summary$Year == year)
 site.sample <- site.summary[num,]
@@ -80,7 +83,6 @@ las.files <- list.files(las.path, pattern = "\\.(las|laz)$", full.names = TRUE)
 #' Output path for Plant Area Density.
 pad.path <- paste0(head.path,"pad/")
 dir.create(pad.path, showWarnings = F)
-
 
 
 #' [Standardised Plotting Parameters]
