@@ -259,3 +259,207 @@ machorn.lad.fixed <- function (leveld.lidar.array, voxel.height, beer.lambert.co
   return(out)
 }
 
+
+scale_modis_lai <- function(x) {
+  x[x < 0 | x > 100] <- NA
+  x <- x * 0.1
+  return(x)
+}
+
+fit_sinusoid <- function(y, design, Xinv) {
+  ok <- is.finite(y)
+  if (sum(ok) < 3) {
+    return(rep(NA_real_, 3))
+  }
+  # All 12 months available
+  if (all(ok)) {
+    return(as.vector(Xinv %*% y))
+  }
+  # Fit using available months
+  coef <- qr.solve(
+    design[ok, , drop = FALSE],
+    y[ok]
+  )
+  return(as.vector(coef))
+}
+
+
+model.pai <- function(r.stk, nyr){
+  r.array <- as.array(r.stk)
+  nmons <- nlyr(r.stk)
+  
+  nrow <- dim(r.array)[1]
+  ncol <- dim(r.array)[2]
+  nmon <- 12
+  
+  if (nmons != nyr * nmon) stop("Missing Months.")
+  
+  stk.array <- array(
+    r.array,
+    dim = c(nrow, ncol, nmon, nyr)
+  )
+  
+  maximums <- apply(
+    stk.array,
+    c(1, 2),
+    function(x) {
+      if (all(is.na(x))) {
+        NA_real_
+      } else {
+        max(x, na.rm = TRUE)
+      }
+    }
+  )
+  
+  # calculate 20% of maximum LAI to account for PAI
+  pai_multi <- maximums * 0.2
+  pai_4D <- array(
+    rep(pai_multi, times = 12 * nyr),
+    dim = dim(stk.array)
+  )
+  PAI_array <- stk.array + pai_4D
+  
+  mean_mon <- apply(
+    PAI_array,
+    c(1, 2, 3),
+    function(x) {
+      if (all(is.na(x))) {
+        NA_real_
+      } else {
+        mean(x, na.rm = TRUE)
+      }
+    }
+  )
+  
+  month <- 1:nmon
+  omega <- 2 * pi / nmon
+  # Matrix for sinusoidal regression:
+  X <- cbind(
+    1,
+    sin(omega * month),
+    cos(omega * month)
+  )
+  
+  Xinv <- solve(t(X) %*% X) %*% t(X)
+  
+  mean_mon_flat <- matrix(
+    mean_mon,
+    nrow = nrow * ncol,
+    ncol = nmon
+  )
+  
+  coefs <- t(apply(
+    mean_mon_flat,
+    1,
+    fit_sinusoid,
+    design = X,
+    Xinv = Xinv
+  ))
+  coef_array <- array(
+    coefs,
+    dim = c(nrow, ncol, 3)
+  )
+  return(
+    list(
+      coef_array = coef_array,
+      pai_MODIS = mean_mon
+    )
+  )
+}
+
+scale_pai <- function(pai_temp, input_month, predicted) {
+  
+  if (!input_month %in% 1:12) {
+    stop("input_month must be an integer from 1 to 12.")
+  }
+  
+  expected <- predicted[[input_month]]
+  
+  # Relative seasonal change compared with the LiDAR acquisition month
+  relative_change <- predicted / expected
+  
+  # Avoid division by zero / invalid MODIS predictions
+  relative_change <- terra::ifel(
+    is.finite(expected) & expected > 0,
+    relative_change,
+    NA
+  )
+  
+  # Apply seasonal variation to LiDAR-derived PAI
+  scaled_stack <- pai_temp * relative_change
+  
+  names(scaled_stack) <- month.name
+  
+  return(scaled_stack)
+}
+
+.MODISAdjust <- function(MODISpath, PAI, input_month){
+  
+  files <- list.files(
+    MODISpath,
+    pattern = "\\.tif$",
+    full.names = TRUE
+  )
+  r.list <- lapply(files, terra::rast)
+  r.stk <- terra::rast(r.list)
+  
+  #' Scale Raw MODIS LAI data.
+  r.stk <- scale_modis_lai(r.stk)
+  nyr <- length(r.list)
+  #' **Convert LAI to PAI**
+  pai_m <- model.pai(r.stk, nyr)
+  
+  #' **Derive intra-annual variation**
+  coef.r <- terra::rast(
+    pai_m$coef_array,
+    ext = terra::ext(r.stk),
+    crs = terra::crs(r.stk)
+  )
+  
+  names(coef.r) <- c("a0", "a1", "b1")
+  
+  coef.rf <- terra::project(
+    coef.r,
+    PAI[[1]],
+    method = "bilinear"
+  )
+  
+  a0_fine <- coef.rf$a0
+  a1_fine <- coef.rf$a1
+  b1_fine <- coef.rf$b1
+  omega <- 2 * pi / 12
+  
+  monthly <- vector("list", 12)
+  for (m in 1:12) {
+    monthly[[m]] <- a0_fine +
+      a1_fine * sin(omega * m) +
+      b1_fine * cos(omega * m)
+  }
+  
+  fine_predicted_stack <- terra::rast(monthly)
+  names(fine_predicted_stack) <- month.name
+  
+  fine_predicted_stack <- terra::clamp(
+    fine_predicted_stack,
+    lower = 0,
+    values = TRUE
+  )
+  
+  #' **Model monthly PAI in LiDAR**
+  pai_list <- vector(
+    "list",
+    nlyr(PAI)
+  )
+  
+  for (i in seq_len(nlyr(PAI))) {
+    pai_temp <- PAI[[i]]
+    pai_list[[i]] <- scale_pai(
+      pai_temp = pai_temp,
+      input_month = input_month,
+      predicted = fine_predicted_stack
+    )
+  }
+  names(pai_list) <- names(PAI)
+  
+  return(pai_list)
+}

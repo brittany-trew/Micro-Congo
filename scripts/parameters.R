@@ -61,10 +61,11 @@ all.samples <- unique(site.summary$Sample)
 print(all.samples)
 sample.name <- all.samples[1] #' *CHANGE AS NEEDED*
 num <- which(site.summary$Sample == sample.name)
+site.sample <- site.summary[num,]
 
 year <- 2021
-num <- which(site.summary$Year == year)
-site.sample <- site.summary[num,]
+num <- which(site.sample$Year == year)
+site.sample <- site.sample[num,]
 input_month <- site.sample$Month
 
 #' (3) Projection system.
