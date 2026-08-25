@@ -24,6 +24,8 @@ packages <- c("dplyr", "tidyr", "readr", "microclimf",
               "patchwork")
 load_packages(packages)
 
+sourceCpp(paste0(scripts.path,"cpp_functions.cpp"))  # compiles and links required C++ code
+
 #' [Set Pathways.]
 #' (1) LiDAR Point Clouds.
 lidar.data <- "/Volumes/HD01/LIDAR/"

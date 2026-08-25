@@ -463,3 +463,117 @@ scale_pai <- function(pai_temp, input_month, predicted) {
   
   return(pai_list)
 }
+
+albedo_fromaerial <- function(RGBimage, CIRimage, RGBbandmins = c(620, 495, 450),
+                              RGBbandmaxs = c(750, 570, 495),
+                              CIRbandmins = c(750, 620, 495),
+                              CIRbandmaxs = c(900, 750, 570)) {
+  # Check resolutions and resample to coarser resolutions if not matching
+  res1 <- res(RGBimage)[1]
+  res2 <- res(CIRimage)[1]
+  if (res1 > res2) CIRimage <- resample(CIRimage, RGBimage)
+  if (res2 > res1) RGBimage <- resample(RGBimage, CIRimage)
+  # Check extents and intersect
+  e1 <- ext(RGBimage)
+  e2 <- ext(CIRimage)
+  e <- ext(max(e1$xmin, e2$xmin), min(e1$xmax, e2$xmax),
+           max(e1$ymin, e2$ymin), min(e1$ymax, e2$ymax))
+  RGBimage <- crop(RGBimage, e)
+  CIRimage <- crop(CIRimage, e)
+  
+  RGBimage <- RGBimage / 10000
+  CIRimage <- CIRimage / 10000
+  # Create weights
+  wgt1 <- sum(.Planck(seq(RGBbandmins[1], RGBbandmaxs[1], by = 1))/(10^13))
+  wgt2 <- sum(.Planck(seq(RGBbandmins[2], RGBbandmaxs[2], by = 1))/(10^13))
+  wgt3 <- sum(.Planck(seq(RGBbandmins[3], RGBbandmaxs[3], by = 1))/(10^13))
+  wgt4 <- sum(.Planck(seq(CIRbandmins[1], CIRbandmaxs[1], by = 1))/(10^13))
+  wgt5 <- sum(.Planck(seq(CIRbandmins[2], CIRbandmaxs[2], by = 1))/(10^13))
+  wgt6 <- sum(.Planck(seq(CIRbandmins[3], CIRbandmaxs[3], by = 1))/(10^13))
+  # calculate albedo
+  albedo <- (RGBimage[[1]] * wgt1 + RGBimage[[2]] * wgt2 + RGBimage[[3]] * wgt3 +
+               CIRimage[[1]] * wgt4 + CIRimage[[2]] * wgt5 + CIRimage[[3]] * wgt6)  /
+    (wgt1 + wgt2 + wgt3 + wgt4 + wgt5 + wgt6)
+  # albedo <- albedo / 255 REMOVED TO REFLECT SENTINEL-2 DATA INPUT
+  albedo <- mask(albedo, RGBimage[[1]])
+  return(albedo)
+}
+
+#' Used by albedo calculations - calculates wavelength specific spectral density
+.Planck <- function(wavelength, temperature =  5504.85) {
+  d <- wavelength * 1e-09
+  h <- 6.6256e-34
+  cc <- 299792458
+  tt <- temperature + 273.15
+  k <- 1.38054e-23
+  b <- (2 * pi * h * cc^2) / (d^5 * (exp((h * cc) / (k * d * tt)) - 1))
+  b
+}
+
+
+albedo_adjust<-function(photoalbedo, modisalbedo) {
+  # crop modis to match extent of aerial
+  if (terra::crs(photoalbedo) != terra::crs(modisalbedo)) modisalbedo<-project(modisalbedo, terra::crs(photoalbedo))
+  v1 <- as.vector(crop(modisalbedo, ext(photoalbedo)))
+  v1 <-v1[is.na(v1) == FALSE]
+  v2 <- as.vector(resample(photoalbedo, modisalbedo))
+  v2 <-v2[is.na(v2) == FALSE]
+  # logit transform
+  lv1 <- log(v1/ (1 - v1))
+  lv2 <- log(v2/ (1 - v2))
+  # if length of either is 1
+  n <- min(length(v1), length(v2))
+  if (n == 1) {
+    mu <- lv1 - lv2
+    lphoto <- log(photoalbedo / (1 - photoalbedo)) + mu
+    albedo <- 1 / (1 + exp(-lphoto))
+  } else {
+    mum <- mean(lv1) - mean(lv2)
+    mus <- sd(lv1) / sd(lv2)
+    lphoto <- log(photoalbedo / (1 - photoalbedo))
+    me <- mean(as.vector(lphoto), na.rm = TRUE)
+    lphoto <- ((lphoto - me) * mus) + mum + me
+    albedo <- 1 / (1 + exp(-lphoto))
+  }
+  return(albedo)
+}
+
+reflectance_calc <- function(alb, lai, x, plotprogress = TRUE, maxiter = 50, tol = 0.001, bwgt = 0.5){
+  e1 <- intersect(ext(lai), ext(alb))
+  e <- intersect(e1, ext(x))
+  lai <- crop(lai, e)
+  alb <- crop(alb, e)
+  x <- crop(x, e)
+  # check dims
+  all_same <- compareGeom(lai, alb, x)
+  if (all_same) {
+    lref <- x * 0 + 0.5
+    gref <- x * 0 + 0.15
+    mxdif <- tol * 10
+    paim <- as.matrix(lai, wide = TRUE)
+    xm <- as.matrix(x, wide = TRUE)
+    albm <- as.matrix(alb, wide = TRUE)
+    itr <- 1
+    while (mxdif > tol) {
+      gref2 <- .rast(find_gref(as.matrix(lref, wide = TRUE), paim, xm, albm), x)
+      gref2 <- .fillna(gref2, x, zerotoNA = FALSE)
+      lref2 <- .rast(find_lref(paim, as.matrix(gref, wide = TRUE), xm, albm), x)
+      lref2 <- .fillna(lref2, x, zerotoNA=FALSE)
+      gref <- bwgt * gref + (1 - bwgt) * gref2
+      lref <- bwgt * lref + (1 - bwgt) * lref2
+      mxdif1 <- mean(abs(as.vector(gref) - as.vector(gref2)), na.rm = TRUE)
+      mxdif2 <- mean(abs(as.vector(lref) - as.vector(lref2)), na.rm = TRUE)
+      mxdif <- max(mxdif1, mxdif2)
+      if (plotprogress & itr%%3 == 0) {
+        tp1 <- paste0("Ground difference from previous: ", round(mxdif1, 4))
+        tp2 <- paste0("Leaf difference from previous: ", round(mxdif2, 4))
+        par(mfrow = c(1, 2))
+        plot(gref, main = tp1, cex.main = 1)
+        plot(lref, main = tp2, cex.main = 1)
+      }
+      itr <- itr+1
+      if (itr > maxiter) mxdif <- 0
+    }
+  } else (stop("Geometries of input rasters do not match"))
+  return(list(gref = gref, lref = lref))
+}
