@@ -57,7 +57,6 @@ albmodis <- albedo_process(r, pathout)
 plot(albmodis)
 writeRaster(albmodis, paste0(head.path,"/albedo_modis.tif"), overwrite = T)
 
-
 albmodis <- rast(paste0(head.path,"/albedo_modis.tif"))
 #' Needs sat imagery to downscale. 
 sat.CIR <- list.files(paste0(head.path,"/sentinel-2/"), 

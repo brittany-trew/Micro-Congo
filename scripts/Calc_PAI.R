@@ -75,6 +75,7 @@ names(PAI.stk) <- sprintf(
   "PAI_%.1fm_to_canopy",
   start_heights
 )
+plot(PAI.stk[[1]])
 
 pai.path <- paste0(head.path,"pai/")
 dir.create(pai.path, showWarnings = F)
@@ -86,7 +87,7 @@ writeRaster(PAI.stk,
 #' Perform a seasonal adjustment using coarse MODIS data.
 MODISpath <- paste0(mclidar.in,"MODIS_LAI/",site.location,"/",sample.name,"/")
 
-pai_list <- .MODISAdjust(MODISpath, PAI, input_month)
+pai_list <- .MODISAdjust(MODISpath, PAI.stk, input_month)
 
 for(i in 1:length(pai_list)){
   hm <- names(pai_list)[i]
