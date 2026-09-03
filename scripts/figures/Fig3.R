@@ -5,101 +5,45 @@ source(paste0(scripts.path, "parameters.R"))
 
 in.path <- paste0(out.data, "pca_clusters/")
 
-#' Function to extract PAD data for a LiDAR site.
-extract_pad_profiles <- function(sample.name,
-                                 site.location,
-                                 year,
-                                 out.data.old,
-                                 in.path,
-                                 dzd) {
-  
+profiles <- read.csv(paste0(outpath,"mean_profiles.csv"))
+
+max_heights <- c()
+for(i in 1:length(all.samples)){
+  sample.name <- all.samples[i]
   head.path <- paste0(
-    out.data.old, site.location, "/", sample.name, "/", year, "/"
+    mclidar.out,
+    site.location,
+    "/",
+    sample.name,
+    "/",
+    year,
+    "/"
   )
   
-  pca <- rast(paste0(in.path, sample.name, "_pca_Clust4.tif"))
-  chm <- rast(paste0(head.path, "chm.tif"))
-  
-  pad.processed <- processPAD(head.path, dzd, chm)
-  pad.aboveG   <- pad.processed[[1]]
-  start_heights <- pad.processed[[2]]
-  
-  pca <- resample(
-    pca,
-    pad.aboveG[[1]],
-    method = "near"
+  chm <- rast(
+    paste0(head.path, "chm.tif")
   )
   
-  pca_values <- values(pca, mat = FALSE)
-  
-  # PAD values assigned to PCA structural class
-  type_data <- bind_rows(
-    lapply(seq_len(nlyr(pad.aboveG)), function(i) {
-      
-      data.frame(
-        Site = sample.name,
-        Forest.Type = pca_values,
-        height_m = start_heights[i],
-        pad = values(pad.aboveG[[i]], mat = FALSE)
-      )
-    })
-  ) %>% filter(
-      Forest.Type %in% 1:4,
-      height_m < 30,
-      !is.na(pad)
-    )
-  
-  # All PAD values, irrespective of forest type
-  overall_data <- bind_rows(
-    lapply(seq_len(nlyr(pad.aboveG)), 
-           function(i) {
-      data.frame(
-        Site = sample.name,
-        height_m = start_heights[i],
-        pad = values(pad.aboveG[[i]], mat = FALSE))
-    })) %>% 
-    filter(
-      height_m < 30,
-      !is.na(pad))
-  
-  list(
-    type_data = type_data,
-    overall_data = overall_data
-  )
+  max_heights[i] <- global(
+    chm,
+    "max",
+    na.rm = TRUE
+  )[1, 1]
 }
+study_max_height <- max(max_heights)
+study_max_height
 
-
-#' Apply function to all sites.
-site_profiles <- lapply(all.samples, function(s) {
-  message("Extracting: ", s)
-  extract_pad_profiles(
-    sample.name = s,
-    site.location = site.location,
-    year = year,
-    out.data.old = out.data.old,
-    in.path = in.path,
-    dzd = dzd
-  )
-})
-
-type_data_all <- bind_rows(
-  lapply(site_profiles, `[[`, "type_data")
-)
-
-overall_data_all <- bind_rows(
-  lapply(site_profiles, `[[`, "overall_data")
-)
-
+profiles <- filter(profiles, height_m <= study_max_height)
 
 #' Mean and summary for all the sites & classes:
-mean_profiles <- type_data_all %>%
+mean_profiles <- profiles %>%
   dplyr::group_by(Forest.Type, height_m) %>%
   dplyr::summarise(
     pad = mean(pad, na.rm = TRUE),
     .groups = "drop") %>%
   arrange(Forest.Type, height_m)
 
-overall_summary <- overall_data_all %>%
+overall_summary <- profiles %>%
   dplyr::group_by(height_m) %>%
   dplyr::summarise(
     mean_pad = mean(pad, na.rm = TRUE),
@@ -157,7 +101,8 @@ final_plot <- ggplot() +
     colour = "Structural Class") +
   theme_classic() +
   theme(
-    legend.position = "bottom")
+    legend.position = "right")+
+  ylim(0,40)
 
 #' Plot
 final_plot
@@ -165,15 +110,15 @@ final_plot
 ggsave(
   paste0(out.data, "plots/Vertical_Profiles_All_Sites.png"),
   plot = final_plot,
-  width = 4.5,
-  height = 6,
+  width = 5,
+  height = 4.5,
   units = "in",
   dpi = 300)
 
 
 #" Figure 4B (Schematic only).
-filt.data <- filter(type_data_all,
-                    Forest.Type == 1)
+filt.data <- filter(profiles,
+                    Forest.Type == 4)
 filt.profile <- filt.data %>%
   dplyr::group_by(height_m) %>%
   dplyr::summarise(
@@ -182,8 +127,20 @@ filt.profile <- filt.data %>%
   arrange(height_m)
 
 #' Add inflection points.
-outpath <- paste0(out.data,"MondoBai/veg_zoning/")
-strata <- readRDS(paste0(outpath,"VegZoning_FT_1.RDS"))
+outpath <- paste0(out.data,"strata/")
+strata <- readRDS(paste0(outpath,"StrataZones_ft_4.RDS"))
+strata <- strata %>%
+  dplyr::mutate(
+    zone_start = ifelse(
+      zone_start == 0,
+      0,
+      pmax(0.5, floor(zone_start / dzd + 0.5) * dzd)
+    ),
+    zone_end = pmax(
+      0.5,
+      floor(zone_end / dzd + 0.5) * dzd
+    )
+  )
 boundary_points <- strata %>%
   summarise(
     height_m = list(unique(c(zone_start, zone_end)))) %>%
@@ -192,7 +149,9 @@ boundary_points <- strata %>%
   left_join(
     filt.profile %>%
       dplyr::select(height_m, pad),
-    by = "height_m")
+    by = "height_m") %>%
+  dplyr::slice(-c(1, n()))
+  
 
 #' Plot mean line with inflection points and derived-strata.
 filt_plot <- ggplot() +
@@ -229,10 +188,11 @@ filt_plot <- ggplot() +
     x = "Plant Area Density",
     y = "Height (m)"
   ) +
-  theme_classic()
+  theme_classic()+
+  ylim(0,40)
 filt_plot
 ggsave(
-  paste0(out.data, "plots/Vertical_Profiles_class1example.png"),
+  paste0(out.data, "plots/Vertical_Profiles_class4example.png"),
   plot = filt_plot,
   width = 4.5,
   height = 6,
@@ -240,7 +200,3 @@ ggsave(
   dpi = 300
 )
 
-
-count.data <- filter(filt.data,
-                    height_m == 0.5)
-nrow(count.data)

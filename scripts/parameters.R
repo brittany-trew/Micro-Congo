@@ -21,7 +21,7 @@ packages <- c("dplyr", "tidyr", "readr", "microclimf",
               "httr", "ecmwfr", "mcera5", "lubridate", "curl",
               "mgcv", "colorspace", "dendextend", "cluster", "factoextra","terra",
               "sfsmisc", "canopyLazR", "ggrepel", "broom", "purrr",
-              "patchwork")
+              "patchwork", "mclust")
 load_packages(packages)
 
 sourceCpp(paste0(scripts.path,"cpp_functions.cpp"))  # compiles and links required C++ code
@@ -61,7 +61,7 @@ site.location <- unique(site.summary$SiteName)
 print(paste0("Site Location: ", site.location))
 all.samples <- unique(site.summary$Sample)
 print(all.samples)
-sample.name <- all.samples[1] #' *CHANGE AS NEEDED*
+sample.name <- all.samples[2] #' *CHANGE AS NEEDED*
 num <- which(site.summary$Sample == sample.name)
 site.sample <- site.summary[num,]
 
@@ -94,35 +94,6 @@ colour.p <- c(
   "2" = "#852e47",
   "3" = "#333333",
   "4" = "#a09c33"
-)
-
-heat_cols <- c(
-  "#f4efe9",
-  "#dfc9ae",
-  "#ca763b",
-  "#a95643",
-  "#852e47",
-  "#333333"
-)
-
-others <- c(
-  "#671b27",
-  "#852e47",
-  "#ca763b"
-)
-
-option1 <- c(
-  "1" = "#5a6b44",
-  "2" = "#e6d7c3",
-  "3" = "#0d384e",
-  "4" = "#c85a3e"
-)
-
-option2 <- c(
-  "1" = "#264a31",
-  "2" = "#f27d16",
-  "3" = "#333333",
-  "4" = "#6b854a"
 )
 
 option3 <- c(
