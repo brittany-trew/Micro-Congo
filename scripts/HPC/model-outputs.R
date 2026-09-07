@@ -1,5 +1,5 @@
 scripts.path <- "scripts/"
-source(paste0(scripts.path,"imbalanga/parameters.R")) # loads worker functions
+source(paste0(scripts.path,"imbalanga/microParameters.R")) # loads worker functions
 
 # -------------------------------
 # Cluster batch command
@@ -182,7 +182,15 @@ for(a in 1:length(yr.seq)){
     tile.path = tile.path,
     chm = chm
   )
-  
+
+  #' Set temperatures to NA where model height exceeds the canopy
+  below_height_mask <- chm < hm
+  daily.r <- lapply(daily.r,
+                    function(r) {
+                      mask(r,
+                           below_height_mask,
+                           maskvalues = 1,
+                           updatevalue = NA)})
   #' Output folder
   outpath <- paste0(out.path,height,"/")
   dir.create(outpath, showWarnings = FALSE)

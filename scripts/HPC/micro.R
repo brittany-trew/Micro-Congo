@@ -1,5 +1,5 @@
 scripts.path <- "scripts/"
-source(paste0(scripts.path,"imbalanga/parameters.R")) # loads worker functions
+source(paste0(scripts.path,"imbalanga/microParameters.R")) # loads worker functions
 
 # -------------------------------
 # Cluster batch command
@@ -76,17 +76,21 @@ if(hm == 0.2){
 }
 pai_0m  <- rast(paste0(head.path, "/pai/PAI_0.0m_to_canopy.tif"))
 
+pai[is.na(pai)] <- 0
+pai_0m[is.na(pai_0m)] <- 0
+
 refl.g  <- rast(paste0(head.path, "/reflectance/groundR.tif"))
 refl.c  <- rast(paste0(head.path, "/reflectance/leafR.tif"))
 soiltype<- rast(paste0(head.path, "/soiltype.tif"))
 
 # Geometry checks
-if(compareGeom(pai,lc) == FALSE) stop("Geometry of PAI rasters do not match land use")
-if(compareGeom(soiltype,lc)== FALSE) stop("Geometry of soil-type raster does not match land use")
-if(compareGeom(refl.g,lc)== FALSE) stop("Geometry of ground reflectance raster does not match land use")
-if(compareGeom(refl.c,lc)== FALSE) stop("Geometry of canopy reflectance raster does not match land use")
-if(compareGeom(dem,lc)== FALSE) stop("Geometry of DEM raster does not match land use")
-if(compareGeom(chm,lc)== FALSE) stop("Geometry of canopy height raster does not match land use")
+pai <- resample(pai, chm)
+pai_0m <- resample(pai_0m, chm)
+lc <- resample(lc, chm, method = "near")
+soiltype <- resample(soiltype, chm, method = "near")
+refl.g <- resample(refl.g, chm)
+refl.c <- resample(refl.c, chm)
+dem <- resample(dem, chm)
 
 all.params <- list(
   pai = pai,

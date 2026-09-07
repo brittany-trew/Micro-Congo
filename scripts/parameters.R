@@ -8,11 +8,12 @@
 #' ----------------------------------------------------------------------------
 #' ----------------------------------------------------------------------------
 #' [Load Helper Functions.]
-scripts.path <- "scripts/"
+scripts.path <- "scripts/helpers/"
 #' Load helper functions:
 source(paste0(scripts.path,"utils.R"))
 source(paste0(scripts.path,"helpers_general.R"))
 source(paste0(scripts.path,"helpers_MicroDrivers.R"))
+source(paste0(scripts.path,"helpers_Figures.R"))
 
 #' [Required R packages]
 packages <- c("dplyr", "tidyr", "readr", "microclimf",
@@ -21,7 +22,7 @@ packages <- c("dplyr", "tidyr", "readr", "microclimf",
               "httr", "ecmwfr", "mcera5", "lubridate", "curl",
               "mgcv", "colorspace", "dendextend", "cluster", "factoextra","terra",
               "sfsmisc", "canopyLazR", "ggrepel", "broom", "purrr",
-              "patchwork", "mclust")
+              "patchwork", "mclust", "data.table", "scales")
 load_packages(packages)
 
 sourceCpp(paste0(scripts.path,"cpp_functions.cpp"))  # compiles and links required C++ code
@@ -101,4 +102,12 @@ option3 <- c(
   "2" = "#eea83b",
   "3" = "#004d47",
   "4" = "#a09c33"
+)
+
+cols_tmax <- c(
+  "#192835",  
+  "#68AE9A",  
+  "#faa825", 
+  "#d9416b", 
+  "#8A211B"  
 )
