@@ -62,7 +62,7 @@ site.location <- unique(site.summary$SiteName)
 print(paste0("Site Location: ", site.location))
 all.samples <- unique(site.summary$Sample)
 print(all.samples)
-sample.name <- all.samples[2] #' *CHANGE AS NEEDED*
+sample.name <- all.samples[1] #' *CHANGE AS NEEDED*
 num <- which(site.summary$Sample == sample.name)
 site.sample <- site.summary[num,]
 

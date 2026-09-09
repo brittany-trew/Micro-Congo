@@ -26,3 +26,67 @@ load_packages <- function(packages) {
     )
   }
 }
+
+collapse_vertical <- function(files, chm) {
+  r.lst <- lapply(files, load_masked, chm = chm)
+  r.stk <- rast(r.lst)
+  
+  r.stk[r.stk < 0] <- NA
+  
+  n_days <- nlyr(r.lst[[1]])
+  index  <- rep(seq_len(n_days), times = length(r.lst))
+  
+  colmax <- tapp(
+    r.stk, index,
+    fun = max,
+    na.rm = TRUE
+  )
+  
+  colmin <- tapp(
+    r.stk, index,
+    fun = min,
+    na.rm = TRUE
+  )
+  
+  colsd <- tapp(
+    r.stk, index,
+    fun = sd,
+    na.rm = TRUE
+  )
+  
+  col95 <- tapp(
+    r.stk,
+    index,
+    fun = function(x, ...) {
+      quantile(
+        x,
+        probs = 0.95,
+        na.rm = TRUE,
+        names = FALSE
+      )
+    }
+  )
+  
+  gc()
+  
+  return(list(
+    colmax = colmax,
+    colmin = colmin,
+    colsd  = colsd,
+    col95  = col95
+  ))
+}
+
+# Extract height (metres) from parent folder name
+# e.g. ".../dailyTemps/5.0m/DailyMax_2009.tif" -> 5
+get_height <- function(f) {
+  as.numeric(gsub("m$", "", basename(dirname(f))))
+}
+
+# Load a single height-band raster, resample to CHM grid, then mask pixels
+# where canopy height is below this height band (i.e. above canopy)
+load_masked <- function(f, chm) {
+  hh <- get_height(f)
+  r  <- resample(rast(f), chm)
+  ifel(chm <= hh, NA, r)
+}
