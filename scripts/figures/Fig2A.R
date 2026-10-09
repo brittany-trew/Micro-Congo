@@ -15,7 +15,6 @@ source(paste0(scripts.path, "parameters.R"))
 #' ----------------------------------------------------------------------------
 #' ----------------------------------------------------------------------------
 #' Vertical microclimate heterogeneity (SD of max temps)
-inpath <- paste0(out.data, sample.name, "/verticalSummary/")
 plot.out <- paste0(out.data,"plots/")
 
 for(b in 1:length(all.samples)){
