@@ -1,27 +1,22 @@
-# Point cloud cross-section shaded by Tmax
-# ── Setup ---------------------------------------------------------------------
+#' Point cloud cross-section shaded by Tmax
+#' ---------------------------------------------------------------------
 scripts.path <- "scripts/"
 source(paste0(scripts.path, "parameters.R"))
 
 library(plotly)
 library(signal)
 
-las.path <- "/Volumes/HD01/LiDAR/OdzalaCongo/"
-
-site <- all.samples[[4]]
-
+las.path <- paste0(lidar.data,site.location,"/",sample.name,"/",year)
 las.options <- list.files(
-  paste0(las.path, site, "/2021/"),
+  paste0(las.path),
   full.names = TRUE
 )
 
-tmaxpath <- paste0(volumes3, site, "/monthlyTemps/")
+tmaxpath <- paste0(out.data, "MeanDailyTemps/")
 
-
-# ============================================================
+#' ---------------------------------------------------------------------
 # Read and normalise LAS
-# ============================================================
-
+#' ---------------------------------------------------------------------
 las2d <- readLAS(las.options[[1]])
 
 dtm <- rasterize_terrain(
@@ -29,26 +24,24 @@ dtm <- rasterize_terrain(
   res = 5,
   algorithm = tin()
 )
-
 las_norm <- normalize_height(las2d, dtm)
 
+#' Extract the normalized point attributes as a data.table
 las_dt <- as.data.table(las_norm@data)
-
+#' Name & store normalized height above ground
 las_dt[, z_h := Z]
+#' Remove points below the estimated ground surface
 las_dt <- las_dt[z_h >= 0]
-
+#' Convert the projected X and Y coordinates to local coordinates
 las_dt[, `:=`(
   norm_X = X - min(X, na.rm = TRUE),
   norm_Y = Y - min(Y, na.rm = TRUE)
 )]
 
-
-# ============================================================
+#' ---------------------------------------------------------------------
 # Build Tmax raster stack
-# ============================================================
-
+#' ---------------------------------------------------------------------
 tmax_obj <- build_tmax_stack(tmaxpath)
-
 r <- tmax_obj$r
 heights <- tmax_obj$heights
 height_check <- tmax_obj$height_check

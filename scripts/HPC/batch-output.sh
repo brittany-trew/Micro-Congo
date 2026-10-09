@@ -4,7 +4,7 @@
 #SBATCH -t 0-12:00                 # runtime
 #SBATCH -p davies,sapphire,shared  # partitions
 #SBATCH --mem=150000               # memory in MB
-#SBATCH --array=1-2              # no jobs: x years × 25 tiles
+#SBATCH --array=58-67             # no jobs: x years × 25 tiles
 #SBATCH -o R/outputs/IMPro_%A.out        # ONE stdout file for whole array
 #SBATCH -e R/outputs/IMPro_%A.err        # ONE stderr file for whole array
 
