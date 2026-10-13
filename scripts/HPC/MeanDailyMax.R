@@ -1,6 +1,6 @@
 #' Calc. Mean Daily Maximum Temperature.
 scripts.path <- "scripts/"
-source(paste0(scripts.path,"imbalanga/microParameters.R")) # loads worker functions
+source(paste0(scripts.path,"mondobai/microParameters.R")) # loads worker functions
 
 # -------------------------------
 # Cluster batch command

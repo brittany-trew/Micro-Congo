@@ -30,36 +30,27 @@ get_global_scale <- function(files) {
 }
 
 
-inpath_all <- "/Volumes/MicroMaze2/"
+inpath_all <- paste0(out.data, all.samples, "/yearlyTemps/")
 
-#' Scale rasters (Needs to be done across sites)
-files_tmin <- list.files(
-  inpath_all,
-  pattern = "yearlyMean_tmin_",
-  recursive = TRUE,
-  full.names = TRUE
-)
+files_tmin <- unlist(lapply(inpath_all, function(path) {
+  list.files(path, pattern = "yearlyMean_tmin_.*.tif$", full.names = TRUE,
+             recursive = TRUE)
+}), use.names = FALSE)
 
-files_tmean_sd <- list.files(
-  inpath_all,
-  pattern = "yearlySD_tmean_",
-  recursive = TRUE,
-  full.names = TRUE
-)
+files_tmean_sd <- unlist(lapply(inpath_all, function(path) {
+  list.files(path, pattern = "yearlySD_tmean_.*.tif$", full.names = TRUE,
+             recursive = TRUE)
+}), use.names = FALSE)
 
-files_q90_tmax <- list.files(
-  inpath_all,
-  pattern = "yearlyq90_tmax_",
-  recursive = TRUE,
-  full.names = TRUE
-)
+files_q90_tmax <- unlist(lapply(inpath_all, function(path) {
+  list.files(path, pattern = "yearlyq90_tmax_.*.tif$", full.names = TRUE,
+             recursive = TRUE)
+}), use.names = FALSE)
 
-files_dr <- list.files(
-  inpath_all,
-  pattern = "DiurnalRange_",
-  recursive = TRUE,
-  full.names = TRUE
-)
+files_dr <- unlist(lapply(inpath_all, function(path) {
+  list.files(path, pattern = "DiurnalRange_.*.tif$", full.names = TRUE,
+             recursive = TRUE)
+}), use.names = FALSE)
 
 scale_tmin     <- get_global_scale(files_tmin)
 scale_tmean_sd <- get_global_scale(files_tmean_sd)

@@ -11,9 +11,9 @@
 scripts.path <- "scripts/helpers/"
 #' Load helper functions:
 source(paste0(scripts.path,"utils.R"))
-source(paste0(scripts.path,"helpers_general.R"))
-source(paste0(scripts.path,"helpers_MicroDrivers.R"))
-source(paste0(scripts.path,"helpers_Figures.R"))
+source(paste0(scripts.path,"helpersGeneral.R"))
+source(paste0(scripts.path,"helpersMicroDrivers.R"))
+source(paste0(scripts.path,"helpersFigures.R"))
 
 #' [Required R packages]
 packages <- c("dplyr", "tidyr", "readr", "microclimf",
@@ -22,7 +22,8 @@ packages <- c("dplyr", "tidyr", "readr", "microclimf",
               "httr", "ecmwfr", "mcera5", "lubridate", "curl",
               "mgcv", "colorspace", "dendextend", "cluster", "factoextra","terra",
               "sfsmisc", "canopyLazR", "ggrepel", "broom", "purrr",
-              "patchwork", "mclust", "data.table", "scales")
+              "patchwork", "mclust", "data.table", "scales",
+              "spdep", "gstat", "nlme","plotly", "signal")
 load_packages(packages)
 
 sourceCpp(paste0(scripts.path,"cpp_functions.cpp"))  # compiles and links required C++ code

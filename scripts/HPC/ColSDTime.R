@@ -1,7 +1,7 @@
 #' Calculate temporal heterogeneity in daily maximum temperature.
 scripts.path <- "scripts/"
 source(paste0(scripts.path,
-              "imbalanga/microParameters.R"))
+              "mondobai/microParameters.R"))
 
 # -------------------------------
 # Cluster batch command

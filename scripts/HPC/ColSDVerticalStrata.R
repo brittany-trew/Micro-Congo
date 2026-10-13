@@ -1,13 +1,13 @@
 #' Calc. Vertical Heterogeneity.
 scripts.path <- "scripts/"
-source(paste0(scripts.path,"imbalanga/microParameters.R")) # loads worker functions
+source(paste0(scripts.path,"mondobai/microParameters.R")) # loads worker functions
 
 # -------------------------------
 # Cluster batch command
 # -------------------------------
 array_id <- as.numeric(Sys.getenv("SLURM_ARRAY_TASK_ID", "1"))
 offset <- as.numeric(Sys.getenv("ARRAY_OFFSET", "0"))
-ft <- array_id + offset
+d <- array_id + offset
 
 #' Helpers:
 collapse_vertical <- function(files, chm) {
@@ -77,19 +77,20 @@ strata.path <- paste0(head.path,"/strata/")
 outpath <- paste0(head.path,"/strataSummary/")
 dir.create(outpath, showWarnings = F)
 
+chm <- rast(paste0(head.path, "chm.tif"))
+
+# ── Process each year and stratum ---------------------------------------------
+yr.seq <- 2004:2024
+yr <- yr.seq[d]
+
+for (ft in 1:4) {
+  message("Processing forest type ", ft, ", year ", yr, " ...")
+  
 strata.file <- paste0(strata.path, "StrataZones_ft_", ft, ".RDS")
 strata <- readRDS(strata.file)
 strata <- strata[order(strata$zone_start, strata$zone_end), , drop = FALSE]
 strata$zone <- seq_len(nrow(strata))
 
-chm <- rast(paste0(head.path, "chm.tif"))
-
-# ── Process each year and stratum ---------------------------------------------
-yr.seq <- 2004:2024
-
-for (yr in yr.seq) {
-  message("Processing forest type ", ft, ", year ", yr, " ...")
-  
   files_max <- list.files(
     data.path,
     pattern    = paste0("DailyMax_", yr, "\\.tif$"),

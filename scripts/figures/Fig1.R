@@ -3,31 +3,31 @@
 scripts.path <- "scripts/"
 source(paste0(scripts.path, "parameters.R"))
 
-library(plotly)
-library(signal)
-
-las.path <- paste0(lidar.data,site.location,"/",sample.name,"/",year)
 las.options <- list.files(
   paste0(las.path),
   full.names = TRUE
 )
 
-tmaxpath <- paste0(out.data, "MeanDailyTemps/")
+tmaxpath <- paste0(out.data, sample.name,"/MeanDailyTemps/")
 
 #' ---------------------------------------------------------------------
-# Read and normalise LAS
-#' ---------------------------------------------------------------------
-las2d <- readLAS(las.options[[1]])
-
+#' Read and normalise LAS
+mem.maxVSize(vsize = 180000)
+rm(las_dt)
+las2d <- readLAS(las.options[[4]])
 dtm <- rasterize_terrain(
   las2d,
   res = 5,
   algorithm = tin()
 )
 las_norm <- normalize_height(las2d, dtm)
+rm(las2d)
+rm(dtm)
+gc()
 
 #' Extract the normalized point attributes as a data.table
 las_dt <- as.data.table(las_norm@data)
+rm(las_norm)
 #' Name & store normalized height above ground
 las_dt[, z_h := Z]
 #' Remove points below the estimated ground surface
@@ -39,80 +39,41 @@ las_dt[, `:=`(
 )]
 
 #' ---------------------------------------------------------------------
-# Build Tmax raster stack
-#' ---------------------------------------------------------------------
+#' Build Tmax raster stack
 tmax_obj <- build_tmax_stack(tmaxpath)
 r <- tmax_obj$r
 heights <- tmax_obj$heights
 height_check <- tmax_obj$height_check
 
-
-# ============================================================
-# Colour limits
-# ============================================================
-
-# Option 2: estimate limits from raster sample instead
-r_sample <- terra::spatSample(
-  r,
-  size = 200000,
-  method = "random",
-  na.rm = TRUE,
-  as.df = TRUE
-)
-global_lims <- quantile(unlist(r_sample), c(0.05, 0.95), na.rm = TRUE)
-
-
 # ============================================================
 # Make several cross-sections
 # ============================================================
-
 slice_ys <- as.numeric(quantile(
   las_dt$Y,
-  probs = c(0.1, 0.3, 0.5, 0.7, 0.9),
+  probs = c(0.1,0.2,0.5),
   na.rm = TRUE
 ))
 
-plots <- lapply(seq_along(slice_ys), function(i) {
-  
-  make_cross_section(
-    las_dt = las_dt,
-    r = r,
-    heights = heights,
-    slice_y = slice_ys[i],
-    slice_width = 25,
-    n_points = 2000000,
-    lims = global_lims,
-    label = paste0("section ", i),
-    point_size = 0.01,
-    point_alpha = 0.45
+p <- make_cross_section(
+  las_dt = las_dt,
+  r = r,
+  heights = heights,
+  slice_y = slice_ys[1],
+  slice_width = 15,
+  n_points = 10000000,
+  point_size = 0.0001,
+  point_alpha = 0.7,
+  lims = c(28,36)
+)
+
+plt <- p + coord_fixed(ratio = 1)
+plt
+
+ggsave(filename = paste0(
+  out.data, "plots/crossSection_tmax_section_", sample.name, ".png"),
+  plot = plt,
+  width = 8,
+  height = 3,
+  units = "in",
+  dpi = 400
   )
-  
-})
-
-names(plots) <- paste0("section_", seq_along(plots))
-
-
-# View plots
-plots[[1]]
-plots[[2]]
-plots[[3]]
-plots[[4]]
-plots[[5]]
-
-
-# ============================================================
-# Save several cross-sections
-# ============================================================
-
-for (i in seq_along(plots)) {
-  
-  ggsave(
-    filename = paste0(out.data, "plots/crossSection_tmaxV2_section_", i, ".png"),
-    plot = plots[[i]],
-    width = 8,
-    height = 2,
-    units = "in",
-    dpi = 300
-  )
-  
-}

@@ -2,9 +2,9 @@
 #SBATCH -J MBHt       # job name
 #SBATCH -c 1                       # number of cores
 #SBATCH -t 0-23:00                 # runtime
-#SBATCH -p davies,sapphire,shared  # partitions
+#SBATCH -p davies,sapphire,shared,serial_requeue  # partitions
 #SBATCH --mem=190G              # memory in MB
-#SBATCH --array=8-12              # no jobs: x years × 25 tiles
+#SBATCH --array=1-21              # no jobs: x years × 25 tiles
 #SBATCH -o R/outputs/MBHet_%A.out        # ONE stdout file for whole array
 #SBATCH -e R/outputs/MBHet_%A.err        # ONE stderr file for whole array
 

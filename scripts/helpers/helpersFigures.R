@@ -1,20 +1,8 @@
 #' Find nearest height layer
 nearest_height_layer <- function(z, heights) {
-  
-  idx <- findInterval(z, heights)
-  
-  idx[idx == 0] <- 1
-  idx[idx >= length(heights)] <- length(heights) - 1
-  
-  left  <- heights[idx]
-  right <- heights[idx + 1]
-  
-  out <- ifelse(abs(z - left) <= abs(z - right), idx, idx + 1)
-  
-  out[z <= min(heights)] <- 1
-  out[z >= max(heights)] <- length(heights)
-  
-  return(out)
+  # Boundaries halfway between successive model heights
+  midpoints <- (head(heights, -1) + tail(heights, -1)) / 2
+  findInterval(z, midpoints) + 1L
 }
 
 
@@ -23,7 +11,6 @@ build_tmax_stack <- function(tmaxpath) {
   
   all.tmax <- list.files(
     tmaxpath,
-    pattern = "yearlyMean_tmax.*\\.tif$",
     full.names = TRUE
   )
   
@@ -31,17 +18,17 @@ build_tmax_stack <- function(tmaxpath) {
     stop("No Tmax files found in: ", tmaxpath)
   }
   
-  # Extract numeric height from filename
+  # Extract numeric height from each filename
   height_from_file <- basename(all.tmax)
   height_from_file <- tools::file_path_sans_ext(height_from_file)
-  height_from_file <- sub("^.*tmax_", "", height_from_file)
-  height_from_file <- as.numeric(height_from_file)
+  height_from_file <- sub("^.*MeanDailyMax_", "", height_from_file)
+  height_from_file <- as.numeric(sub("m$", "", height_from_file))
   
   if (anyNA(height_from_file)) {
     stop("Some heights could not be extracted from Tmax filenames.")
   }
   
-  # Sort by real numeric height, not alphabetical filename order
+  # Apply the SAME ordering to both files and heights
   ord <- order(height_from_file)
   
   all.tmax <- all.tmax[ord]
@@ -82,60 +69,68 @@ make_cross_section <- function(las_dt,
                                r,
                                heights,
                                slice_y,
-                               slice_width = 25,
-                               n_points = 2000000,
+                               slice_width = 5,
+                               n_points = 100000,
                                lims = NULL,
                                label = NULL,
                                cols = cols_tmax,
-                               point_size = 0.01,
-                               point_alpha = 0.45) {
+                               point_size = 0.3,
+                               point_alpha = 0.6) {
   
-  # Extract cross-section
-  cs <- las_dt[
-    Y >= slice_y - slice_width &
-      Y <= slice_y + slice_width
-  ]
+  # Find points within the strip (total thickness = 2 * slice_width)
+  idx <- which(
+    las_dt$Y >= slice_y - slice_width &
+      las_dt$Y <= slice_y + slice_width &
+      las_dt$norm_X >= 0 &
+      las_dt$norm_X <= 250
+  )
   
-  if (nrow(cs) == 0) {
+  if (length(idx) == 0L) {
     stop("No LiDAR points found in this cross-section.")
   }
   
-  # Sample points for plotting
+  # Sample before copying, keeping only the necessary columns
   set.seed(1)
-  cs_plot <- copy(cs[sample(.N, min(.N, n_points))])
+  if (length(idx) > n_points) {
+    idx <- idx[sample.int(length(idx), n_points)]
+  }
   
-  # Match point height to nearest modelled Tmax height
-  cs_plot[, z_match := pmin(pmax(z_h, min(heights)), max(heights))]
-  cs_plot[, layer_id := nearest_height_layer(z_match, heights)]
-  
-  # Extract all Tmax layers at point X/Y locations
-  temp_vals <- terra::extract(
-    r,
-    as.matrix(cs_plot[, .(X, Y)])
+  cs_plot <- data.table::copy(
+    las_dt[idx, .(X, Y, norm_X, z_h)]
   )
   
-  # Remove ID column if terra adds one
-  if ("ID" %in% names(temp_vals)) {
-    temp_vals <- temp_vals[, names(temp_vals) != "ID"]
+  # Match each point to its nearest modelled height
+  cs_plot[, layer_id := nearest_height_layer(z_h, heights)]
+  cs_plot[, tmax := NA_real_]
+  
+  # Extract only the matching temperature layer for each point
+  for (j in unique(cs_plot$layer_id)) {
+    rows <- which(cs_plot$layer_id == j)
+    
+    vals <- terra::extract(
+      r[[j]],
+      as.matrix(cs_plot[rows, .(X, Y)])
+    )
+    
+    data.table::set(
+      cs_plot,
+      i = rows,
+      j = "tmax",
+      value = vals[[1]]
+    )
   }
   
-  temp_mat <- as.matrix(temp_vals)
+  cs_plot <- cs_plot[is.finite(tmax)]
   
-  # For each point, select the Tmax layer matching its height
-  cs_plot[, tmax := temp_mat[cbind(seq_len(.N), layer_id)]]
-  cs_plot <- cs_plot[!is.na(tmax)]
+  if (nrow(cs_plot) == 0L) {
+    stop("No valid temperatures found in this cross-section.")
+  }
   
-  # Define colour limits if not supplied
   if (is.null(lims)) {
-    lims <- quantile(cs_plot$tmax, c(0.05, 0.95), na.rm = TRUE)
+    lims <- quantile(cs_plot$tmax, c(0.1, 0.9), na.rm = TRUE)
   }
   
-  if (is.null(label)) {
-    label <- paste0("Y = ", round(slice_y, 1), " m")
-  }
-  
-  # Plot
-  p <- ggplot(cs_plot, aes(x = norm_X, y = z_h, colour = tmax)) +
+  ggplot(cs_plot, aes(x = norm_X, y = z_h, colour = tmax)) +
     geom_point(size = point_size, alpha = point_alpha) +
     scale_colour_gradientn(
       name = "Tmax",
@@ -144,10 +139,8 @@ make_cross_section <- function(las_dt,
       oob = scales::squish
     ) +
     labs(
-      x = "Distance across tile (m)",
-      y = "Height above ground (m)"
+      x = "",
+      y = ""
     ) +
     theme_classic()
-  
-  return(p)
 }
