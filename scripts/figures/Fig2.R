@@ -1,7 +1,7 @@
 # =============================================================================
-# Vertical Thermal Summaries
+# Vertical Thermal Heterogeneity
 # Computes spatial maps of peak temperature and vertical thermal spread
-# across the forest column for each year, then summarises across 2004-2024
+# across the forest column for each year, then takes the mean across 2004-2024
 # =============================================================================
 terraOptions(
   tempdir = "/Volumes/MicroMaze2/tmp",
@@ -21,20 +21,20 @@ for(b in 1:length(all.samples)){
   sample.name <- all.samples[[b]]
   outpath <- paste0(out.data, sample.name, "/verticalSummary/")
   
-  colsd_all <- rast(list.files(outpath, pattern = "^verticalSD_.*.tif$", full.names = TRUE))
   # MAP 1: Mean of vertical standard deviation in Daily Tmax
+  colsd_all <- rast(list.files(outpath, pattern = "^verticalSD_.*.tif$", full.names = TRUE))
   mean_sd <- app(colsd_all, mean, na.rm = TRUE)
 
   # Remove values above the 95th percentile
-  sd_q98 <- terra::global(
+  sd_q95 <- terra::global(
     mean_sd,
     fun = stats::quantile,
     probs = 0.95,
     na.rm = TRUE
   )[1, 1]
-  mean_sd <- ifel(mean_sd > sd_q98, NA, mean_sd)
-  
+  mean_sd <- ifel(mean_sd > sd_q95, NA, mean_sd)
   plot(mean_sd)
+  
   writeRaster(
     mean_sd,
     paste0(plot.out, "Fig2A_",sample.name,".tif"),
@@ -44,22 +44,25 @@ for(b in 1:length(all.samples)){
   
 }
 
+#' Vertical range in daily max temperatures.
 for(b in 1:length(all.samples)){
   sample.name <- all.samples[[b]]
   outpath <- paste0(out.data, sample.name, "/verticalSummary/")
+  head.path <- paste0(mclidar.out,site.location,"/",sample.name,"/",year,"/")
+  chm <- rast(paste0(head.path,"chm.tif"))
   
+  #' Vertical Range in daily tmax
   colrange_all <- rast(list.files(outpath, pattern = "^verticalRange_.*.tif$", full.names = TRUE))
-  # MAP 1: Mean of vertical standard deviation in Daily Tmax
   max_range <- app(colrange_all, max, na.rm = TRUE)
-  # Remove values above the 98th percentile
-  sd_q98 <- terra::global(
+  # Remove values above the 95th percentile
+  sd_q95 <- terra::global(
     max_range,
     fun = stats::quantile,
     probs = 0.95,
     na.rm = TRUE
   )[1, 1]
-  max_range <- ifel(max_range > sd_q98, NA, max_range)
-  
+  max_range <- ifel(max_range > sd_q95, NA, max_range)
+  max_range <- terra::ifel(chm <= 0.5, NA, max_range)
   plot(max_range)
   writeRaster(
     max_range,
@@ -69,7 +72,8 @@ for(b in 1:length(all.samples)){
   message("  Max range written for: ",sample.name,".")
 }
 
-for (b in seq_along(all.samples)) {
+
+for(b in 1:length(all.samples)){
   
   sample.name <- all.samples[[b]]
   
@@ -118,7 +122,8 @@ for (b in seq_along(all.samples)) {
   # Confirm matching geometry and number/order of days
   stopifnot(nlyr(colmax_all) == nlyr(colrange_all))
   
-  # Spatial mean column Tmax for each day
+  #' Calc spatial mean of col Tmax for each day
+  #' So that we can find the hottest days
   daily_forest_tmax <- terra::global(
     colmax_all,
     fun = "mean",
