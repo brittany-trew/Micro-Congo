@@ -1,10 +1,10 @@
 #' ----------------------------------------------------------------------------
+#' Table S4
 #' Pool summary statistics across all sites.
 scripts.path <- "scripts/"
 source(paste0(scripts.path, "parameters.R"))
 
 plot.out <- paste0(out.data,"plots/")
-
 table.out <- paste0(out.data,"tables/")
 
 metric_files <- list(
@@ -116,5 +116,5 @@ print(pooled_statistics)
 
 write.csv(pooled_statistics,
           file.path(table.out,
-                    "pooled_vertical_thermal_statistics.csv"),
+                    "tableS4.csv"),
           row.names = FALSE)

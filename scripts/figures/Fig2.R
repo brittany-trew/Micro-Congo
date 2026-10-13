@@ -8,7 +8,6 @@ terraOptions(
   memfrac = 0.7
 )
 
-# Setup ---------------------------------------------------------------------
 scripts.path <- "scripts/"
 source(paste0(scripts.path, "parameters.R"))
 
@@ -72,7 +71,7 @@ for(b in 1:length(all.samples)){
   message("  Max range written for: ",sample.name,".")
 }
 
-
+#' Mean Vertical range on the hottest 5% of days
 for(b in 1:length(all.samples)){
   
   sample.name <- all.samples[[b]]
