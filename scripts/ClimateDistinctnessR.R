@@ -134,6 +134,8 @@ for(a in 1:length(all.samples)){
   distinct_mean <- rast(paste0(out.data,"climate_distinctness/",sample.name,"_Mean_allyears.tif"))
   names(distinct_mean) <- yr.seq
 
+  outpath <- paste0(out.data,"climate_distinctness/",sample.name,"/")
+  dir.create(outpath,showWarnings = F)
   
   for(f in 1:length(forest.types)){
     #' For forest type f:
@@ -210,13 +212,11 @@ for(a in 1:length(all.samples)){
       }
       
       writeRaster(distinct_mean, 
-                  paste0(out.data,"climate_distinctness/",sample.name,"/FT_",
-                         ft,"_Mean_allyears_",
+                  paste0(outpath,"ft_",ft,"_Mean_allyears_",
                          z1$zone_start,"_",z1$zone_end,".tif"),
                   overwrite = T)
       writeRaster(distinct_sd, 
-                  paste0(out.data,"climate_distinctness/",sample.name,"/FT_",
-                         ft,"_SD_allyears_",
+                  paste0(outpath,"ft_",ft,"_SD_allyears_",
                          z1$zone_start,"_",z1$zone_end,".tif"),
                   overwrite = T)
     }

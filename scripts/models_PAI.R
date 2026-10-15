@@ -1,16 +1,17 @@
-# PAI and thermal heterogeneity
-# Four models, all fitted by lm with log-transformed responses.
-# Uncertainty: spatial blocks resampled WITHIN sites, at 300 m and 500 m.
+# Fitting PAI and thermal heterogeneity
+# Ten models, all fitted by lm with log-transformed responses.
+# Uncertainty: spatial blocks resampled within sites, at 300 m and 500 m.
 # All eligible observations are fitted. Only variogram diagnostics are sampled.
-# No GLS, stratum-identity terms, or interaction models in this script.
-#
+
 # Model 1: whole-column PAI -> whole-profile vertical heterogeneity
 # Model 2: whole-column PAI -> whole-profile temporal heterogeneity
 # Model 3: whole-column PAI -> within-stratum vertical heterogeneity
 # Model 4: matching stratum PAI -> within-stratum vertical heterogeneity
-# Models 3 and 4 use exactly the same cell-stratum rows.
-# PAI is an input to the temperature model: these are descriptive associations
-# among model inputs and outputs, not independent empirical validation.
+# Model 5: whole-column PAI -> within-stratum temporal heterogeneity
+# Model 6: matching stratum PAI -> within-stratum temporal heterogeneity
+# Models 7-10: models 3-6 plus categorical stratum identity (zone_id).
+# All models for a given stratum response use exactly the same rows.
+# Identity-adjusted models have stratum-specific intercepts and a common PAI slope.
 
 scripts.path <- "scripts/"
 source(paste0(scripts.path, "parameters.R"))
@@ -19,21 +20,15 @@ block_sizes_m <- c(300, 500)
 bootstrap_B <- 4999L
 bootstrap_seed <- 123L
 variogram_max_cells <- 2000L
-# FALSE: omit stratum variograms only. Whole-profile variograms are still saved.
-# Stratum variograms use separate site-stratum groups to avoid repeated locations.
+
 run_stratum_variograms <- TRUE
+
 plot_dir <- file.path(out.data, "plots", "pai_lm_final")
 table_dir <- file.path(out.data, "tables", "pai_lm_final")
 dir.create(plot_dir, recursive = TRUE, showWarnings = FALSE)
 dir.create(table_dir, recursive = TRUE, showWarnings = FALSE)
 
-# 2. Extract paired raster values -------------------------------------------
-# Preserves the supplied processPAD(pad.r, chm_mosaic) call.
-# PAD layers must represent the dzd intervals given in their names.
-# A single total-PAI raster is unchanged by mean(); a stack is averaged across
-# its layers, preserving the existing workflow. It is not averaged over cells.
-# Heterogeneity masks determine which structural-class cells are retained.
-
+## Helper functions ----
 site.df <- function(mclidar.out, all.samples, inpath){
   site.list <- list()
   
@@ -160,10 +155,6 @@ site.df.strata <- function(mclidar.out, all.samples, inpath,
       PAI <- sum(pad_subset) * dzd
       PAI[PAI == 0] <- NA
       
-      # Check that cell locations match
-      terra::compareGeom(PAI, heterogeneity, stopOnError = TRUE)
-      terra::compareGeom(PAI, pai_total, stopOnError = TRUE)
-      
       paired <- c(PAI, heterogeneity, pai_total)
       names(paired) <- c("pai", "var", "pai_total")
       
@@ -190,7 +181,6 @@ site.df.strata <- function(mclidar.out, all.samples, inpath,
   return(dplyr::bind_rows(site.list))
 }
 
-# 3. Prepare observations ---------------------------------------------------
 prepare_data <- function(dat, predictors, strata = FALSE) {
   required <- c("sample", "cell", "x_km", "y_km", "var", predictors)
   if (strata) required <- c(required, "zone_id")
@@ -202,38 +192,59 @@ prepare_data <- function(dat, predictors, strata = FALSE) {
   dat <- dat[keep, , drop = FALSE]
   if (nrow(dat) < 3L) stop("Not enough eligible observations")
   dat$sample <- factor(dat$sample)
+  if (strata) dat$zone_id <- droplevels(factor(dat$zone_id))
   keys <- c("sample", "cell", if (strata) "zone_id")
   if (anyDuplicated(dat[keys])) stop("Duplicate extracted observations: check input files")
   dat <- dplyr::arrange(dat, sample, cell)
   dat
 }
 
-# 4. Bootstrap a simple PAI slope ------------------------------------------
-# This helper supports ONLY log(var) ~ one predictor.
-# Block summaries yield the same slope as refitting every resampled row.
-# Multiple strata at a horizontal cell stay together in the same block.
-bootstrap_slope <- function(dat, predictor, block_size_m, B, seed) {
+bootstrap_slope <- function(dat, predictor, block_size_m, B, seed,
+                            stratum_identity = FALSE) {
   if (block_size_m <= 0 || B < 2L) stop("Invalid bootstrap settings")
   d <- dat
-  d$.x <- d[[predictor]] - mean(d[[predictor]])
+  # One group reproduces the original unadjusted slope. Multiple groups
+  # give the common PAI slope adjusted for categorical stratum identity.
+  d$.group <- if (stratum_identity) as.character(d$zone_id) else "all"
+  d$.x <- d[[predictor]]
   d$.y <- log(d$var)
+  # Fixed shifts improve numerical stability without changing fitted slopes.
+  d$.x <- d$.x - ave(d$.x, d$.group, FUN = mean)
+  d$.y <- d$.y - ave(d$.y, d$.group, FUN = mean)
   d$block_id <- paste(d$sample,
                       floor(d$x_km * 1000 / block_size_m),
                       floor(d$y_km * 1000 / block_size_m), sep = "_")
-  stats <- d %>%
-    dplyr::group_by(sample, block_id) %>%
-    dplyr::summarise(n = dplyr::n(), sx = sum(.x), sy = sum(.y),
-                     sxx = sum(.x^2), sxy = sum(.x * .y), .groups = "drop") %>%
+  blocks <- dplyr::distinct(d, sample, block_id) %>%
     dplyr::arrange(sample, block_id)
-  by_site <- split(seq_len(nrow(stats)), stats$sample, drop = TRUE)
+  by_site <- split(seq_len(nrow(blocks)), blocks$sample, drop = TRUE)
   if (any(lengths(by_site) < 2L)) stop("Need at least two occupied blocks per site")
-  values <- as.matrix(stats[c("n", "sx", "sy", "sxx", "sxy")])
+  
+  # Sufficient statistics per spatial block AND identity; this avoids
+  # refitting millions of individual rows in every bootstrap replicate.
+  stats <- d %>%
+    dplyr::group_by(block_id, .group) %>%
+    dplyr::summarise(n = dplyr::n(), sx = sum(.x), sy = sum(.y),
+                     sxx = sum(.x^2), sxy = sum(.x * .y), .groups = "drop")
+  group_names <- sort(unique(d$.group))
+  values <- matrix(0, nrow = nrow(blocks), ncol = 5L * length(group_names))
+  block_index <- match(stats$block_id, blocks$block_id)
+  group_index <- match(stats$.group, group_names)
+  stat_names <- c("n", "sx", "sy", "sxx", "sxy")
+  for (k in seq_along(stat_names)) {
+    values[cbind(block_index, (group_index - 1L) * 5L + k)] <- stats[[stat_names[k]]]
+  }
   calculate <- function(totals) {
-    denom <- totals["sxx"] - totals["sx"]^2 / totals["n"]
-    if (!is.finite(denom) || denom <= .Machine$double.eps * max(1, totals["sxx"])) {
+    z <- matrix(totals, ncol = 5L, byrow = TRUE,
+                dimnames = list(NULL, stat_names))
+    z <- z[z[, "n"] > 0, , drop = FALSE]
+    # Recalculate within-identity centring in each resample.
+    denom <- sum(z[, "sxx"] - z[, "sx"]^2 / z[, "n"])
+    numer <- sum(z[, "sxy"] - z[, "sx"] * z[, "sy"] / z[, "n"])
+    if (!is.finite(denom) ||
+        denom <= .Machine$double.eps * max(1, sum(z[, "sxx"]))) {
       return(NA_real_)
     }
-    unname((totals["sxy"] - totals["sx"] * totals["sy"] / totals["n"]) / denom)
+    unname(numer / denom)
   }
   set.seed(seed)
   draws <- replicate(B, {
@@ -256,7 +267,6 @@ bootstrap_slope <- function(dat, predictor, block_size_m, B, seed) {
        estimate = calculate(colSums(values)), block_counts = counts)
 }
 
-# 5. Diagnostics -----------------------------------------------------------
 save_diagnostics <- function(model, id) {
   residual <- rstandard(model)
   png(file.path(plot_dir, paste0(id, "_QQ.png")),
@@ -305,11 +315,18 @@ save_variograms <- function(model, dat, id, strata = FALSE) {
   }
 }
 
-# 6. Fit, summarise, and save one model -------------------------------------
 analyse_model <- function(dat, predictor, id, response, predictor_label,
-                          strata = FALSE) {
+                          strata = FALSE, stratum_identity = FALSE) {
   # Dataset must already be prepared. na.fail prevents silently changing rows.
-  formula <- stats::reformulate(predictor, response = "log(var)")
+  if (stratum_identity) {
+    if (!strata || !"zone_id" %in% names(dat)) {
+      stop("Stratum identity requires prepared stratum data")
+    }
+    dat$zone_id <- droplevels(factor(dat$zone_id))
+    if (nlevels(dat$zone_id) < 2L) stop("Need at least two stratum identities")
+  }
+  formula <- stats::reformulate(
+    c(predictor, if (stratum_identity) "zone_id"), response = "log(var)")
   model <- stats::lm(formula, data = dat, na.action = stats::na.fail)
   stopifnot(nobs(model) == nrow(dat))
   slope <- unname(coef(model)[predictor])
@@ -319,7 +336,8 @@ analyse_model <- function(dat, predictor, id, response, predictor_label,
   if (!strata || run_stratum_variograms) save_variograms(model, dat, id, strata)
   
   bootstraps <- lapply(block_sizes_m, function(size) {
-    bootstrap_slope(dat, predictor, size, bootstrap_B, bootstrap_seed)
+    bootstrap_slope(dat, predictor, size, bootstrap_B, bootstrap_seed,
+                    stratum_identity = stratum_identity)
   })
   for (boot in bootstraps) {
     if (!isTRUE(all.equal(slope, boot$estimate, tolerance = 1e-8))) {
@@ -331,6 +349,8 @@ analyse_model <- function(dat, predictor, id, response, predictor_label,
     ci <- bootstraps[[k]]$CI
     data.frame(
       model = id, response = response, predictor = predictor_label,
+      stratum_identity = stratum_identity,
+      formula = paste(deparse(formula), collapse = " "),
       n_observations = nobs(model), n_horizontal_cells = n_cells,
       n_sites = dplyr::n_distinct(dat$sample),
       R2_log = summary_model$r.squared,
@@ -353,7 +373,9 @@ analyse_model <- function(dat, predictor, id, response, predictor_label,
        bootstrap_draws = lapply(bootstraps, function(x) x$draws))
 }
 
-# 7. Model 1: whole-column PAI -> whole-profile VERTICAL heterogeneity --------
+
+## Extract paired raster values ----
+#' Model 1: *Vertical heterogeneity vs total PAI.*
 dat_profile_vertical <- prepare_data(
   site.df(mclidar.out, all.samples, paste0(out.data, "/plots/Fig2A_")), "pai")
 results_profile_vertical <- analyse_model(
@@ -361,8 +383,7 @@ results_profile_vertical <- analyse_model(
   "Whole-profile vertical thermal heterogeneity", "Whole-column PAI")
 m_profile_vertical <- results_profile_vertical$model
 
-# 8. Model 2: whole-column PAI -> whole-profile TEMPORAL heterogeneity --------
-# Fig2B is the temporal heterogeneity raster prefix from the existing workflow.
+#' Model 2: *Temporal heterogeneity vs total PAI.*
 dat_profile_temporal <- prepare_data(
   site.df(mclidar.out, all.samples, paste0(out.data, "/plots/Fig2B_")), "pai")
 results_profile_temporal <- analyse_model(
@@ -370,43 +391,40 @@ results_profile_temporal <- analyse_model(
   "Whole-profile temporal thermal heterogeneity", "Whole-column PAI")
 m_profile_temporal <- results_profile_temporal$model
 
-# 9. Extract stratum data ONCE ---------------------------------------------
+## Extract paired raster values (verticalH Strata version) ----
 dat_strata <- prepare_data(
   site.df.strata(mclidar.out, all.samples, inpath = out.data, response = "vertical"),
   predictors = c("pai_total", "pai"), strata = TRUE)
-
-# Repeated horizontal cells are intentional: a cell can contribute several
-# strata. Both models use all these rows; the bootstrap keeps them together.
 saveRDS(dat_strata, file.path(table_dir, "paired_stratum_data_vertical.rds"))
 
-# 10. Model 3: whole-column PAI -> within-stratum VERTICAL heterogeneity ------
+#' Model 3: *whole-column PAI vs within-stratum vertical heterogeneity*
 results_total <- analyse_model(
   dat_strata, "pai_total", "model3_strata_whole_column_PAI",
   "Within-stratum vertical thermal heterogeneity", "Whole-column PAI",
   strata = TRUE)
 m_total <- results_total$model
 
-# 11. Model 4: matching stratum PAI -> within-stratum VERTICAL heterogeneity --
+#' Model 4: *matching stratum PAI -> within-stratum VERTICAL heterogeneity*
 results_stratum <- analyse_model(
   dat_strata, "pai", "model4_strata_matching_PAI",
   "Within-stratum vertical thermal heterogeneity", "Matching stratum PAI",
   strata = TRUE)
 m_stratum <- results_stratum$model
 
-# 12. Extract stratum data ONCE ---------------------------------------------
+## Extract paired raster values (verticalT Strata version) ----
 dat_strata_temporal <- prepare_data(
   site.df.strata(mclidar.out, all.samples, inpath = out.data, response = "temporal"),
   predictors = c("pai_total", "pai"), strata = TRUE)
 saveRDS(dat_strata_temporal, file.path(table_dir, "paired_temporal_stratum_data.rds"))
 
-# 13. Model 5: whole-column PAI -> within-stratum TEMPORAL heterogeneity -------
+#' Model 5: *whole-column PAI vs within-stratum temporal heterogeneity* 
 results_total_temporal <- analyse_model(
   dat_strata_temporal, "pai_total", "model5_temporal_strata_whole_column_PAI",
   "Within-stratum temporal thermal heterogeneity", "Whole-column PAI",
   strata = TRUE)
 m_total_temporal <- results_total_temporal$model
 
-# 14. Model 6: matching stratum PAI -> within-stratum TEMPORAL heterogeneity ---
+#' Model 6: *matching stratum PAI vs within-stratum temporal heterogeneity*
 results_stratum_temporal <- analyse_model(
   dat_strata_temporal, "pai", "model6_temporal_strata_matching_PAI",
   "Within-stratum temporal thermal heterogeneity", "Matching stratum PAI",
@@ -414,37 +432,102 @@ results_stratum_temporal <- analyse_model(
 m_stratum_temporal <- results_stratum_temporal$model
 
 
-# 12. Final tables and saved fitted models ----------------------------------
+## Add stratum identity using the same observations as models 3-6 ----
+# zone_id combines structural class and height interval, e.g. f1_0to5.
+# Each identity gets its own intercept; the PAI slope is shared.
+
+#' Model 7: *whole-column PAI + identity vs vertical heterogeneity*
+results_total_identity <- analyse_model(
+  dat_strata, "pai_total", "model7_vertical_total_PAI_identity",
+  "Within-stratum vertical thermal heterogeneity", "Whole-column PAI",
+  strata = TRUE, stratum_identity = TRUE)
+m_total_identity <- results_total_identity$model
+
+#' Model 8: *matching stratum PAI + identity vs vertical heterogeneity*
+results_stratum_identity <- analyse_model(
+  dat_strata, "pai", "model8_vertical_matching_PAI_identity",
+  "Within-stratum vertical thermal heterogeneity", "Matching stratum PAI",
+  strata = TRUE, stratum_identity = TRUE)
+m_stratum_identity <- results_stratum_identity$model
+
+#' Model 9: *whole-column PAI + identity vs temporal heterogeneity*
+results_total_temporal_identity <- analyse_model(
+  dat_strata_temporal, "pai_total", "model9_temporal_total_PAI_identity",
+  "Within-stratum temporal thermal heterogeneity", "Whole-column PAI",
+  strata = TRUE, stratum_identity = TRUE)
+m_total_temporal_identity <- results_total_temporal_identity$model
+
+#' Model 10: *matching stratum PAI + identity vs temporal heterogeneity*
+results_stratum_temporal_identity <- analyse_model(
+  dat_strata_temporal, "pai", "model10_temporal_matching_PAI_identity",
+  "Within-stratum temporal thermal heterogeneity", "Matching stratum PAI",
+  strata = TRUE, stratum_identity = TRUE)
+m_stratum_temporal_identity <- results_stratum_temporal_identity$model
+
+## Compare explanatory power on identical rows within each response ----
 all_results <- list(
   profile_vertical = results_profile_vertical,
   profile_temporal = results_profile_temporal,
-  vertical_strata_whole_column_PAI = results_total,
-  vertical_strata_matching_PAI = results_stratum,
-  temporal_strata_whole_column_PAI = results_total_temporal,
-  temporal_strata_matching_PAI = results_stratum_temporal)
-all_model_results <- dplyr::bind_rows(lapply(all_results, function(x) x$results))
-all_block_counts <- dplyr::bind_rows(lapply(all_results, function(x) x$block_counts))
-write.csv(all_model_results, file.path(table_dir, "all_model_results.csv"), row.names = FALSE)
-write.csv(all_block_counts, file.path(table_dir, "all_model_block_counts.csv"), row.names = FALSE)
+  vertical_total = results_total,
+  vertical_stratum = results_stratum,
+  temporal_total = results_total_temporal,
+  temporal_stratum = results_stratum_temporal,
+  vertical_total_identity = results_total_identity,
+  vertical_stratum_identity = results_stratum_identity,
+  temporal_total_identity = results_total_temporal_identity,
+  temporal_stratum_identity = results_stratum_temporal_identity
+)
 
-# ONLY Models 3 and 4 have the same response AND identical observations.
-# Compare their descriptive R2 values directly. Models 1 and 2 describe
-# different responses and their R2 values are not a like-for-like comparison.
-comparison_pair <- function(total_model, stratum_model, dat, response) {
-  stopifnot(nobs(total_model) == nrow(dat), nobs(stratum_model) == nrow(dat))
-  data.frame(
-    model = c("Whole-column PAI", "Matching stratum PAI"),
-    response = response,
-    n_observations = c(nobs(total_model), nobs(stratum_model)),
-    R2_log = c(summary(total_model)$r.squared, summary(stratum_model)$r.squared),
-    adjusted_R2_log = c(summary(total_model)$adj.r.squared,
-                        summary(stratum_model)$adj.r.squared))
-}
-comparison <- dplyr::bind_rows(
-  comparison_pair(m_total, m_stratum, dat_strata,
-                  "Within-stratum vertical thermal heterogeneity"),
-  comparison_pair(m_total_temporal, m_stratum_temporal, dat_strata_temporal,
-                  "Within-stratum temporal thermal heterogeneity"))
-write.csv(comparison, file.path(table_dir, "stratum_PAI_comparison.csv"), row.names = FALSE)
-print(comparison)
-saveRDS(all_results, file.path(table_dir, "PAI_models_and_bootstrap_results.rds"))
+model_comparison <- dplyr::bind_rows(lapply(all_results, function(x) {
+  x$results[1L, c(
+    "model", "response", "predictor", "stratum_identity",
+    "n_observations", "R2_log", "adjusted_R2_log"
+  )]
+}))
+
+write.csv(
+  model_comparison,
+  file.path(table_dir, "stratum_model_comparison.csv"),
+  row.names = FALSE
+)
+
+print(model_comparison)
+
+supplementary_table <- dplyr::bind_rows(
+  lapply(all_results, function(x) x$results)
+) %>%
+  dplyr::select(
+    model,
+    response,
+    predictor,
+    stratum_identity,
+    n_observations,
+    n_horizontal_cells,
+    n_sites,
+    R2_log,
+    adjusted_R2_log,
+    percent_change,
+    lower_95_percent,
+    upper_95_percent,
+    block_size_m,
+    bootstrap_replicates,
+    CI_method
+  ) %>%
+  dplyr::mutate(
+    dplyr::across(
+      c(R2_log, adjusted_R2_log),
+      ~ round(.x, 3)
+    ),
+    dplyr::across(
+      c(percent_change, lower_95_percent, upper_95_percent),
+      ~ round(.x, 2)
+    )
+  )
+
+write.csv(
+  supplementary_table,
+  file.path(table_dir, "Table_S2_PAI_thermal_heterogeneity.csv"),
+  row.names = FALSE
+)
+
+print(supplementary_table)
