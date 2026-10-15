@@ -3,34 +3,32 @@
 scripts.path <- "scripts/"
 source(paste0(scripts.path, "parameters.R"))
 
-all.samples <- all.samples[-1]
 dzd = 1
 yr.seq        <- seq(2004, 2024, 1)
 
 site_list <- list()
 for(a in 1:length(all.samples)){
   sample.name <- all.samples[[a]]
-  if(sample.name=="MobaCluster"){
-    yr.seq <- yr.seq[-4]
-    }else{yr.seq <- seq(2004, 2024, 1)}
   #' Site set up.
-  head.path <- paste0(out.data.old, site.location, "/", sample.name, "/", year, "/")
-  inpath  <- paste0(volumes3, sample.name, "/")
-  outpath <- paste0(inpath, "monthlyTemps/")
+  inpath  <- paste0(out.data, sample.name, "/yearlyTemps")
+  outpath <- paste0(out.data, "tmax_warming/")
   dir.create(outpath, showWarnings = F)
   
-  in.path <- paste0(out.data,sample.name,"/veg_zoning/")
+  strata.path <- paste0(out.data,"/strata/")
   
-  chm           <- rast(paste0(head.path, "/chm.tif"))
   pca.path <- paste0(out.data,"pca_clusters/")
-  pca <- rast(paste0(pca.path, sample.name, "_pca_Clust4.tif"))
+  pca <- rast(paste0(pca.path, sample.name, "_pca_C4.tif"))
 
   forest.types <- unique(values(pca, na.rm = T))
-  all.tmax <- list.files(outpath, pattern = "yearlyMean_tmax.*.tif",
+  all.tmax <- list.files(inpath, pattern = "yearlyMean_tmax.*.tif",
                          full.names = T)
   heights_found <- as.numeric(
     sub(".*yearlyMean_tmax_([0-9.]+)\\.tif$", "\\1", all.tmax)
   )
+  
+  ordered.h <- order(heights_found)
+  all.tmax  <- all.tmax[ordered.h]
+  heights    <- heights_found[ordered.h]
   
   #' --------------------------------------------------------------------------
   #' --------------------------------------------------------------------------
@@ -39,7 +37,8 @@ for(a in 1:length(all.samples)){
   for(f in 1:length(forest.types)){
     #' For forest type f:
     ft <- forest.types[f]
-    zones <- readRDS(paste0(in.path,"VegZoning_FT_",ft,".RDS"))
+    zones <- readRDS(paste0(strata.path,"StrataZones_ft_",ft,".RDS"))
+    
     for(z in 1:nrow(zones)){
       z1 <- zones[z,]
       files_max <- all.tmax[heights_found >= z1$zone_start & heights_found < z1$zone_end]

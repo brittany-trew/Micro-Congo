@@ -12,8 +12,8 @@
 # PAI is an input to the temperature model: these are descriptive associations
 # among model inputs and outputs, not independent empirical validation.
 
-# 1. Setup ------------------------------------------------------------------
-source("scripts/parameters.R")
+scripts.path <- "scripts/"
+source(paste0(scripts.path, "parameters.R"))
 
 block_sizes_m <- c(300, 500)
 bootstrap_B <- 4999L

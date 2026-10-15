@@ -15,6 +15,8 @@ source(paste0(scripts.path,"helpersGeneral.R"))
 source(paste0(scripts.path,"helpersMicroDrivers.R"))
 source(paste0(scripts.path,"helpersFigures.R"))
 
+upscaler::source_batch(paste0(scripts.path,"helpers"))
+
 #' [Required R packages]
 packages <- c("dplyr", "tidyr", "readr", "microclimf",
               "myClim", "ggplot2", "sf", 'lidR',"RCSF", "RMCC", "Rcpp", 
@@ -63,7 +65,7 @@ site.location <- unique(site.summary$SiteName)
 print(paste0("Site Location: ", site.location))
 all.samples <- unique(site.summary$Sample)
 print(all.samples)
-sample.name <- all.samples[1] #' *CHANGE AS NEEDED*
+sample.name <- all.samples[2] #' *CHANGE AS NEEDED*
 num <- which(site.summary$Sample == sample.name)
 site.sample <- site.summary[num,]
 

@@ -21,7 +21,7 @@ for(i in 1:length(all.samples)){
     spath <- paste0(out.data, "strata/")
     strata <- readRDS(paste0(spath,"StrataZones_ft_",ft,".RDS"))
     
-    inpath <- paste0(out.data,sample.name,"/strataSummary/")
+    inpath <- paste0(volumes3,sample.name,"/strataSummary/")
     
     for(z in 1:nrow(strata)){
       
@@ -53,15 +53,9 @@ for(i in 1:length(all.samples)){
     }
   }
   
-  file.remove(list.files(rpath, pattern = paste0("^sdVertical.*",z1$zone_start,"to",z1$zone_end,".tif$"),  full.names = TRUE))
-  
-  
   #' Temporal means.
   for(f in 1:4){
     ft <- f
-    
-    spath <- paste0(out.data, "strata/")
-    strata <- readRDS(paste0(spath,"StrataZones_ft_",ft,".RDS"))
     
     inpath <- paste0(out.data,sample.name,"/verticalSummary/")
     
