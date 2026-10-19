@@ -25,8 +25,18 @@ Run the following R scripts in order:
 
 ### 2. Prepare microclimate model inputs
 
-Run the site-specific land-cover processing script, followed by:
+Download land-cover and PAI data from Google Earth Engine, eg:
 
+- `scripts/gee/DownloadSentinel.js`
+- `scripts/gee/DownloadMODIS.js`
+
+Run the site-specific land-cover processing script, eg: 
+
+- `scripts/land_cover/process_landcover_Imbalanga.R`
+
+followed by:
+
+- `scripts/CalcPAI.R`
 - `scripts/GroundMetrics.R`
 - `scripts/processMacroclimate.R`
 
