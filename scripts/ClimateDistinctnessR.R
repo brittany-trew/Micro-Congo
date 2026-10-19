@@ -11,9 +11,9 @@ clim_dist_fun <- function(x) {
   #' columns = climate variables
   mat <- matrix(
     x,
-    nrow = n.h,
     ncol = 4,
-    byrow = FALSE)
+    byrow = FALSE
+  )
   #' Remove heights containing missing values
   mat <- mat[complete.cases(mat), , drop = FALSE]
   #' Require at least two valid heights to calculate
@@ -44,7 +44,7 @@ load_scaled <- function(files, scale_pars) {
 #' ----------------------------------------------------------------------------
 inpath_all <- "/Volumes/MicroMaze2/"
 all.scales <- readRDS(paste0(out.data,"climate_distinctness/scaling.RDS"))
-strata.path <- paste0(out.data,"strata/")
+strata.path <- paste0(out.data,"/strata/")
 
 #' ----------------------------------------------------------------------------
 #' ----------------------------------------------------------------------------
@@ -79,6 +79,21 @@ for(a in 1:length(all.samples)){
   for(i in 1:length(yr.seq)){
     
     yr <- yr.seq[i]
+    #' if any years are missing:
+    if (any(c(
+      !as.character(yr) %in% names(tmin.mean),
+      !as.character(yr) %in% names(tmean.sd),
+      !as.character(yr) %in% names(q90.tmax),
+      !as.character(yr) %in% names(DR.mean)
+    ))) {
+      message("Adding empty year: ", sample.name, " ", yr)
+      
+      empty_year <- tmin.mean[[1]] * NA_real_
+      distinct_mean <- c(distinct_mean, empty_year)
+      distinct_sd   <- c(distinct_sd, empty_year)
+      
+      next
+    }
     idx <- which(names(tmin.mean) == yr)
     tmin.r <- tmin.mean[[idx]]  
     
@@ -108,7 +123,7 @@ for(a in 1:length(all.samples)){
     distinct_sd <- c(distinct_sd,clim_dist[[2]])
   }
   
-  plot(distinct_mean[[1]])
+  plot(distinct_mean[[2]])
   writeRaster(distinct_mean, 
               paste0(out.data,"climate_distinctness/",sample.name,"_Mean_allyears.tif"), 
               overwrite = T)
@@ -132,7 +147,6 @@ for(a in 1:length(all.samples)){
   forest.types <- unique(values(pca, na.rm = T))
   
   distinct_mean <- rast(paste0(out.data,"climate_distinctness/",sample.name,"_Mean_allyears.tif"))
-  names(distinct_mean) <- yr.seq
 
   outpath <- paste0(out.data,"climate_distinctness/",sample.name,"/")
   dir.create(outpath,showWarnings = F)
@@ -155,9 +169,23 @@ for(a in 1:length(all.samples)){
       print(paste0("Zone: ",z1$zone_start," to ", z1$zone_end))
       distinct_mean <- rast()
       distinct_sd <- rast()
-      for(i in 1:length(yr.seq)){
+      
+      #' if any years are missing:
+      if (any(c(
+        !as.character(yr) %in% names(tmin.mean),
+        !as.character(yr) %in% names(tmean.sd),
+        !as.character(yr) %in% names(q90.tmax),
+        !as.character(yr) %in% names(DR.mean)
+      ))) {
+        message("Adding empty year: ", sample.name, " ", yr)
         
-        yr <- yr.seq[i]
+        empty_year <- tmin.mean[[1]] * NA_real_
+        distinct_mean <- c(distinct_mean, empty_year)
+        distinct_sd   <- c(distinct_sd, empty_year)
+        
+        next
+      }
+      
         idx <- which(names(tmin.mean) == yr)
         tmin.r <- tmin.mean[[idx]]  
         names(tmin.r) <- model.heights[1:nlyr(tmin.r)]
@@ -221,7 +249,7 @@ for(a in 1:length(all.samples)){
                   overwrite = T)
     }
   }
-}
+
 
 
 

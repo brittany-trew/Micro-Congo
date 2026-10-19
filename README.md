@@ -1,44 +1,60 @@
-# Micro-Congo
-
-Code associated with analyses of vertical forest structure and microclimate
-in Congolese tropical forests.
-
-Paper Title: Vertical microclimate diversity shapes thermal refugia in Congolese rainforests.
-Authors: Brittany T. Trew, Rebecca Senior, Evan G. Hockridge, Tom R. Bishop, Charlene Janion-Scheepers, Gwili Gibbon, Guillaume Baltus, Andrew B. Davies
-
-Code Author: Brittany Trew, contact brittany.trew@fas.harvard.edu.
-
-## Overview
-
-This repository contains R scripts used to process LiDAR-derived forest
-structure data, model below-canopy microclimates, and analyse vertical
-microclimatic variation across study sites for LiDAR sites in Odzala-Kokoua NP, Congo.
-
-## Repository structure
-
-- `scripts/` — R scripts used for data processing and analysis
-- `scripts/lidar/` — LiDAR processing
-- `scripts/microclimate/` — microclimate modelling
-- `scripts/analysis/` — statistical analyses
-- `scripts/figures/` — figure generation
-
-## Data
-
-Raw and processed datasets are not included in this repository because of
-their size.
-
 ## Requirements
 
-Analyses were conducted in R and Google Earth Engine.
+The workflow uses R and Google Earth Engine. Microclimate modelling and
+subsequent processing were run on a high-performance computing (HPC)
+cluster using the SLURM scheduler.
+
+The full workflow is computationally intensive and was designed for HPC
+execution. SLURM submission scripts are provided in `scripts/HPC/`.
+Before use, adapt file paths, account names, partitions and resource
+requests to your computing environment.
 
 ## Workflow
 
-1. Process LiDAR data and derive forest structural metrics.
-2. Generate below-canopy temperature estimates.
-3. Calculate vertical microclimate metrics.
-4. Analyse relationships between forest structure and microclimate.
-5. Generate manuscript figures.
+Run R scripts from the repository root so that relative paths resolve
+correctly. First, edit `scripts/parameters.R` to specify file paths and
+site settings.
 
-## Citation
+### 1. Process LiDAR data
 
-Citation information will be added following publication.
+Run the following R scripts in order:
+
+- `scripts/ProcessLiDAR.R`
+- `scripts/StructuralClasses.R`
+- `scripts/StructuralStrata.R`
+
+### 2. Prepare microclimate model inputs
+
+Run the site-specific land-cover processing script, followed by:
+
+- `scripts/GroundMetrics.R`
+- `scripts/processMacroclimate.R`
+
+### 3. Run the microclimate model and process outputs
+
+Submit the shell scripts from a terminal on the HPC cluster using
+`sbatch`. For example:
+
+```bash
+sbatch scripts/HPC/batch-imbalanga.sh
+```
+
+The submission stages are listed below. Allow each stage to complete
+before submitting any stage that requires its outputs.
+
+1. `batch-imbalanga.sh` — run the model for Imbalanga; use the
+   corresponding submission scripts for other sites.
+2. `batch-output.sh` — process model outputs into daily summaries.
+3. `batch-dailymax.sh`
+4. `batch-SDvertical.sh`
+5. `batch-SDtime.sh`
+6. `batch-SDverticalZones.sh`
+7. `batch-SDtemporalZones.sh`
+8. `batch-yearVars.sh`
+
+All submission scripts are located in `scripts/HPC/`.
+
+### 4. Analyse results and generate figures
+
+Run the statistical analysis and figure-generation scripts using the
+outputs produced above.
