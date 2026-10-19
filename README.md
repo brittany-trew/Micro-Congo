@@ -64,7 +64,21 @@ before submitting any stage that requires its outputs.
 
 All submission scripts are located in `scripts/HPC/`.
 
-### 4. Analyse results and generate figures
+### 4. Analyse results
+
+- `scripts/strata_means.R`
+- `scripts/scale_variables.R`
+- `scripts/tmax_warming.R`
+- `scripts/models_PAI.R`
+- `scripts/modelsCD.R`
+
+### 5. Generate Main Figures
+
+- `scripts/Fig1.R`
+- `scripts/Fig2.R`
+- `scripts/Fig3.R`
+
+
 
 Run the statistical analysis and figure-generation scripts using the
 outputs produced above.
