@@ -2,7 +2,7 @@
 var siteLabel = 'Imbalanga';  // << change this once
 var utmCRS = 'EPSG:32633';       // << set once for the region
 var exportFolder = 'MODIS_LAI_' + siteLabel;
-var assetPath = 'projects/ee-brittanytrew01/assets/' + siteLabel + '_bbox';
+var assetPath = 'projects/ee-username/assets/' + siteLabel + '_bbox';
 // =========================================
 
 // Load bounding box as FeatureCollection
